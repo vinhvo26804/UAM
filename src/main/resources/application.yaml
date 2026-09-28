@@ -1,0 +1,30 @@
+server:
+  port: 8089
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/postgres
+    username: postgres
+    password: "123456"
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+
+
+  flyway:
+    enabled: false
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+jwt:
+  secret: "VZxl206STPUDBx5yxr3wah8iw5I1oPHzDqbfifXPhehjNf8pUP5832GcLppwT37l"
+  expiration: 360000
+  refresh-expiration: 1296000000 # 15 days, in milliseconds
