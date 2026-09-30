@@ -1,0 +1,4 @@
+ALTER TABLE users ADD COLUMN phone CHAR(10);
+ALTER TABLE users ADD COLUMN DoB DATE;
+ALTER TABLE users ADD COLUMN fullname varchar(255);
+

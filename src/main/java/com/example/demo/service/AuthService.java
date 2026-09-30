@@ -108,14 +108,15 @@ public class AuthService {
         return "Login Success";
     }
 
-    public String Vertify(VertifyRequest vertifyRequest) {
+    public String Vertify(VertifyRequest vertifyRequest)
+    {
         Optional<User> userOptional = userRepository.findByUsername(vertifyRequest.getUserName());
         if (userOptional.isEmpty()) {
             return "Not valid";
         }
         User user = userOptional.get();
 
-        Optional<OTP> otpOptional = verifyRespository.findByUserId(user.getId());
+        Optional<OTP> otpOptional = verifyRespository.findById(user.getId());
         if (otpOptional.isEmpty()) {
             return "OTP not found";
         }

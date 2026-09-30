@@ -24,10 +24,12 @@ public class OTP {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     private Long userId;
+    private  String username;
     @Column(unique = true, length = 6)
     private String otpCode;
     private LocalDateTime expriedAt;
     private String purpose;
+    private String target;
 }
 //    @ManyToMany(fetch =  FetchType.EAGER)
 //    @JoinTable(
