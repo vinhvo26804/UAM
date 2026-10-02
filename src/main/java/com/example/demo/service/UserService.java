@@ -5,20 +5,28 @@ import com.example.demo.dto.request.User.UpdateUserRequest;
 import com.example.demo.dto.request.VerifyChangeEmailRequest;
 import com.example.demo.dto.response.UserResponse;
 import com.example.demo.entity.OTP;
+import com.example.demo.entity.Role;
 import com.example.demo.entity.User;
+import com.example.demo.entity.UserStatus;
 import com.example.demo.respository.UserRepository;
 import com.example.demo.respository.VerifyRepository;
-import jakarta.transaction.Transactional;
+import org.springframework.transaction.annotation.Transactional;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Date;
+import java.util.List;
 import java.util.Random;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 public class UserService {
@@ -31,6 +39,7 @@ public class UserService {
 
 
     // GET CURRENT USER
+    @Transactional(readOnly = true)
     public UserResponse me(String username) {
 
         User user = userRepository.findByUsername(username)
@@ -41,10 +50,62 @@ public class UserService {
         return new UserResponse(
                 user.getId(),
                 user.getUsername(),
-                user.getStatus()
+                user.getPhone(),
+                user.getDoB(),
+                user.getStatus(),
+                user.getFullname(),
+                user.getRoles()
+                        .stream()
+                        .map(Role::getName)
+                        .map(Enum::name)
+                        .collect(Collectors.toSet())
         );
     }
+    @PreAuthorize("hasRole('ADMIN')")
+    @Transactional(readOnly = true)
+    public List<UserResponse> searchUsers(
+            String username,
+            String email,
+            String role,
+            String status
+    ) {
 
+        username = normalize(username);
+        email = normalize(email);
+        role = normalize(role);
+        status = normalize(status);
+
+        List<User> users = userRepository.searchUsers(
+                username,
+                email,
+                role,
+                status
+        );
+
+        return users.stream()
+                .map(user -> new UserResponse(
+                        user.getId(),
+                        user.getUsername(),
+                        user.getPhone(),
+                        user.getDoB(),
+                        user.getStatus(),
+                        user.getFullname(),
+                        user.getRoles()
+                                .stream()
+                                .map(Role::getName)
+                                .map(Enum::name)
+                                .collect(Collectors.toSet())
+                ))
+                .toList();
+    }
+
+    private String normalize(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+
+        return value.trim();
+    }
 
     // REQUEST CHANGE EMAIL
     @Transactional
@@ -53,7 +114,7 @@ public class UserService {
             String username
     ) {
 
-        User user = userRepository.findByUsername(username).orElseThrow(() -> new RuntimeException("User not found"));
+        User user = activeUserForUpdate(username);
 
         // Email mới không được giống email hiện tại
         if (user.getEmail().equals(request.getEmail())) {
@@ -63,11 +124,6 @@ public class UserService {
         // Email mới không được thuộc user khác
         if (userRepository.existsByemail(request.getEmail())) {
             throw new RuntimeException("Email already exists");
-        }
-        // Chỉ account ACTIVE mới được đổi email
-        if (!"ACTIVE".equals(user.getStatus())) {
-            throw new RuntimeException("Account is not active"
-            );
         }
         /*
          * Mỗi user chỉ nên có 1 OTP CHANGE_EMAIL đang tồn tại.
@@ -95,9 +151,9 @@ public class UserService {
 
 
     // VERIFY OTP AND UPDATE EMAIL
+    @Transactional
     public void verifyChangeEmail(VerifyChangeEmailRequest request, String username) {
-        User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+        User user = activeUserForUpdate(username);
 
         OTP otp = verifyRepository
                 .findByUserIdAndPurpose(user.getId(), "CHANGE_EMAIL")
@@ -145,9 +201,9 @@ public class UserService {
         return String.valueOf(otp);
     }
 
+    @Transactional
     public void updateUser(@Valid @RequestBody UpdateUserRequest request, String username){
-        User user = userRepository.findByUsername(username).
-                                    orElseThrow(()->new RuntimeException("User not found!"));
+        User user = activeUserForUpdate(username);
 
 //        if(request.getFullname().equals(user.getFullname()) || (request.getPhone().equals(user.getPhone())) )
 //            throw new RuntimeException("Value aren't different");
@@ -159,5 +215,17 @@ public class UserService {
             user.setDoB(request.getDoB());
             userRepository.save(user);
 
+    }
+
+    private User activeUserForUpdate(String username) {
+        User user = userRepository.findByUsernameForUpdate(username)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+        if (user.getStatus() == UserStatus.LOCKED) {
+            throw new ResponseStatusException(HttpStatus.LOCKED, "Account is locked");
+        }
+        if (user.getStatus() != UserStatus.ACTIVE) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Account is not active");
+        }
+        return user;
     }
 }

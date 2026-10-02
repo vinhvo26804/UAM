@@ -4,6 +4,7 @@ import com.example.demo.dto.request.Role.AssignRoleRequest;
 import com.example.demo.dto.request.Role.AssignRoleRequest;
 import com.example.demo.entity.Role;
 import com.example.demo.service.RoleService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -13,6 +14,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/roles")
+@Tag(name = "Roles")
 @RequiredArgsConstructor
 public class RoleController {
 

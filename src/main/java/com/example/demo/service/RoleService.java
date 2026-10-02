@@ -21,7 +21,7 @@ public class RoleService {
     }
 
     public Role getRoleByName(String roleName) {
-        return roleRepository.findByName(roleName)
+        return roleRepository.findByName(Role.RoleType.valueOf(roleName))
                 .orElseThrow(() -> new RuntimeException("Role invalid!"));
     }
 
@@ -29,7 +29,7 @@ public class RoleService {
     public void setRoleToUser(String username, String roleName) {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("User not found"));
-        Role role = roleRepository.findByName(roleName).orElseThrow(() -> new RuntimeException("Role not found!"));
+        Role role = roleRepository.findByName(Role.RoleType.valueOf(roleName)).orElseThrow(() -> new RuntimeException("Role not found!"));
         user.getRoles().add(role);
 
         userRepository.save(user);
@@ -47,7 +47,7 @@ public class RoleService {
                         new RuntimeException("User not found")
                 );
 
-        Role role = roleRepository.findByName(roleName)
+        Role role = roleRepository.findByName(Role.RoleType.valueOf(roleName))
                 .orElseThrow(() ->
                         new RuntimeException("Role not found!")
                 );

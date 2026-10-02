@@ -4,6 +4,7 @@ import com.example.demo.dto.request.ForgotPasswordRequest;
 import com.example.demo.dto.request.ResetPasswordRequest;
 import com.example.demo.entity.PasswordResetOtp;
 import com.example.demo.entity.User;
+import com.example.demo.entity.UserStatus;
 import com.example.demo.respository.PasswordResetOtpRepository;
 import com.example.demo.respository.RefreshTokenRepository;
 import com.example.demo.respository.UserRepository;
@@ -51,7 +52,7 @@ class PasswordResetServiceTests {
                 .username("alice")
                 .email("alice@example.test")
                 .password(passwordEncoder.encode("old-password"))
-                .status("ACTIVE")
+                .status(UserStatus.ACTIVE)
                 .build();
         when(userRepository.findByUsernameForUpdate("alice")).thenReturn(Optional.of(alice));
         when(otpRepository.findByUserId(11L))
@@ -95,7 +96,7 @@ class PasswordResetServiceTests {
     @Test
     void unknownUserAndUnverifiedAccountDoNotReceiveCodes() {
         service.requestOtp(forgot("missing-user"));
-        alice.setStatus("PENDING");
+        alice.setStatus(UserStatus.PENDING);
         service.requestOtp(forgot("alice"));
 
         verify(sender, times(2)).checkAvailable();
@@ -198,19 +199,19 @@ class PasswordResetServiceTests {
         assertTrue(passwordEncoder.matches("new-password", alice.getPassword()));
         assertFalse(passwordEncoder.matches("old-password", alice.getPassword()));
         assertTrue(storedOtp.get().isConsumed());
-        verify(refreshTokenRepository).revokeAllByUserId(alice.getId());
+        verify(refreshTokenRepository).revokeByUserId(alice.getId());
     }
 
     @Test
     void passwordResetRecoversLockedAccountAndClearsLoginFailures() {
-        alice.setStatus("LOCKED");
+        alice.setStatus(UserStatus.LOCKED);
         alice.setLockUntill(LocalDateTime.now().plusMinutes(15));
         alice.setFailedLoginAttemps(5);
         service.requestOtp(forgot("alice"));
 
         service.resetPassword(reset("alice", latestCode(), "new-password"));
 
-        assertEquals("ACTIVE", alice.getStatus());
+        assertEquals(UserStatus.ACTIVE, alice.getStatus());
         assertNull(alice.getLockUntill());
         assertEquals(0, alice.getFailedLoginAttemps());
         assertTrue(passwordEncoder.matches("new-password", alice.getPassword()));
@@ -225,7 +226,7 @@ class PasswordResetServiceTests {
         assertInvalid(reset("alice", code, "attacker-password"));
 
         assertTrue(passwordEncoder.matches("new-password", alice.getPassword()));
-        verify(refreshTokenRepository, times(1)).revokeAllByUserId(alice.getId());
+        verify(refreshTokenRepository, times(1)).revokeByUserId(alice.getId());
     }
 
     @Test
@@ -283,7 +284,7 @@ class PasswordResetServiceTests {
         assertInvalid(reset("alice", "123456", "new-password"));
         assertInvalid(reset("missing-user", "123456", "new-password"));
         service.requestOtp(forgot("alice"));
-        alice.setStatus("PENDING");
+        alice.setStatus(UserStatus.PENDING);
         assertInvalid(reset("alice", latestCode(), "new-password"));
 
         assertTrue(passwordEncoder.matches("old-password", alice.getPassword()));
@@ -293,7 +294,7 @@ class PasswordResetServiceTests {
     @Test
     void codeForOneUserCannotResetAnotherUserPassword() {
         service.requestOtp(forgot("alice"));
-        User bob = User.builder().Id(12L).username("bob").status("ACTIVE")
+        User bob = User.builder().Id(12L).username("bob").status(UserStatus.ACTIVE)
                 .email("bob@example.test").password(passwordEncoder.encode("bob-password")).build();
         when(userRepository.findByUsernameForUpdate("bob")).thenReturn(Optional.of(bob));
 

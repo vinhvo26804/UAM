@@ -43,7 +43,12 @@ public class JwtAuthenticationFilter
         return "/loginWithJwt".equals(path)
                 || "/refreshToken".equals(path)
                 || ("POST".equals(request.getMethod()) && "/logout".equals(path))
-                || path.startsWith("/api/v1/auth/");
+                || path.startsWith("/api/v1/auth/")
+                || "/swagger-ui.html".equals(path)
+                || path.startsWith("/swagger-ui/")
+                || "/v3/api-docs".equals(path)
+                || path.startsWith("/v3/api-docs/")
+                || "/v3/api-docs.yaml".equals(path);
     }
 
     @Override
@@ -78,6 +83,11 @@ public class JwtAuthenticationFilter
                     return;
                 }
                 UserDetails userDetails = userDetailsService.loadUserByUsername(userName);
+                if (!userDetails.isEnabled() || !userDetails.isAccountNonLocked()
+                        || !userDetails.isAccountNonExpired() || !userDetails.isCredentialsNonExpired()) {
+                    reject(response, "Account is not active; log in after it is enabled or unlocked");
+                    return;
+                }
 
                 UsernamePasswordAuthenticationToken authentication =
                         new UsernamePasswordAuthenticationToken(

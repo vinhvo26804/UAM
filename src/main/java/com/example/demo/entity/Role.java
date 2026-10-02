@@ -11,16 +11,21 @@ import java.util.Set;
 @Table(name = "role")
 @Getter
 @Setter
-
-
 public class Role {
+
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY) //Tự động tăng
-    private  long Id;
-    @Column(nullable = false, unique = true,length = 50) // Cấu hình cho thộc tính
-    private String name;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
 
+    public enum RoleType {
+        USER,
+        MODERATOR,
+        ADMIN
+    }
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, unique = true)
+    private RoleType name;
 
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(

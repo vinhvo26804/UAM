@@ -4,6 +4,7 @@ import com.example.demo.dto.request.LoginRequest;
 import com.example.demo.dto.request.RefreshTokenRequest;
 import com.example.demo.dto.response.LoginResponse;
 import com.example.demo.entity.User;
+import com.example.demo.entity.UserStatus;
 import com.example.demo.respository.UserRepository;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
@@ -142,7 +143,7 @@ class AuthPersistenceIntegrationTests {
         user.setUsername(username);
         user.setEmail(username + "@example.test");
         user.setPassword(passwordEncoder.encode("test-password"));
-        user.setStatus("ACTIVE");
+        user.setStatus(UserStatus.ACTIVE);
         testUserId = userRepository.saveAndFlush(user).getId();
         entityManager.clear();
 

@@ -5,14 +5,18 @@ import com.example.demo.dto.request.User.UpdateUserRequest;
 import com.example.demo.dto.request.VerifyChangeEmailRequest;
 import com.example.demo.dto.response.UserResponse;
 import com.example.demo.service.UserService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping
+@Tag(name = "Users")
 
 public class UserController {
     @Autowired
@@ -52,5 +56,29 @@ public class UserController {
         userService.updateUser(request, authentication.getName());
         return ResponseEntity.ok("Update user successfully");
     }
+    @GetMapping("/search")
+    public ResponseEntity<List<UserResponse>> searchUsers(
 
+            @RequestParam(required = false)
+            String username,
+
+            @RequestParam(required = false)
+            String email,
+
+            @RequestParam(required = false)
+            String role,
+
+            @RequestParam(required = false)
+            String status
+    ) {
+
+        return ResponseEntity.ok(
+                userService.searchUsers(
+                        username,
+                        email,
+                        role,
+                        status
+                )
+        );
+    }
 }

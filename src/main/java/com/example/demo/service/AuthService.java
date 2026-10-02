@@ -4,25 +4,24 @@ import com.example.demo.dto.request.*;
 import com.example.demo.dto.response.LoginResponse;
 import com.example.demo.entity.OTP;
 import com.example.demo.entity.RefreshToken;
+import com.example.demo.entity.Role;
 import com.example.demo.entity.User;
-import com.example.demo.respository.ForgotPasswordRepository;
-import com.example.demo.respository.RefreshTokenRepository;
-import com.example.demo.respository.UserRepository;
-import com.example.demo.respository.VerifyRepository;
+import com.example.demo.entity.UserStatus;
+import com.example.demo.respository.*;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Bean;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.DisabledException;
+import org.springframework.security.authentication.LockedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
@@ -54,7 +53,9 @@ public class AuthService {
     private RefreshTokenRepository refreshTokenRepository;
     @Autowired
     private  ForgotPasswordRepository forgotPasswordRepository;
-
+    @Autowired
+    private RoleRepository roleRepository;
+    @Transactional
     public String register(RegisterRequest request) {
         if (userRepository.existsByUsername(request.getUserName())) {
             throw new RuntimeException("User đã tồn tại");
@@ -62,13 +63,15 @@ public class AuthService {
         if (userRepository.existsByemail(request.getEmail())) {
             throw new RuntimeException("Email đã tồn tại");
         }
-
+        Role defaultRole = roleRepository.findByName(Role.RoleType.USER)
+                .orElseThrow(() -> new IllegalStateException("Default USER role is missing; run database migrations"));
         // Tạo đối tượng với mật khẩu đã mã hóa BCrypt
         User user = User.builder()
                 .username(request.getUserName())
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
                 .build();
+        user.getRoles().add(defaultRole);
 
         User userSaved = userRepository.save(user);
 
@@ -89,8 +92,9 @@ public class AuthService {
 
 
 
+    @Transactional(noRollbackFor = ResponseStatusException.class)
     public String Login(LoginRequest loginRequest) {
-        Optional<User> userOptional = userRepository.findByUsername(
+        Optional<User> userOptional = userRepository.findByUsernameForUpdate(
                 loginRequest.getUserName()
         );
 
@@ -99,40 +103,44 @@ public class AuthService {
         }
         User user = userOptional.get();
 
-        if ("PENDING".equals(user.getStatus())) {
-            return "Account must not actice!";
-        }
+        requireLoginAllowed(user);
         if (!passwordEncoder.matches(loginRequest.getPassword(), user.getPassword())) {
             return " Username or password wrong! ";
         }
         return "Login Success";
     }
 
+    @Transactional
     public String Vertify(VertifyRequest vertifyRequest)
     {
-        Optional<User> userOptional = userRepository.findByUsername(vertifyRequest.getUserName());
+        Optional<User> userOptional = userRepository.findByUsernameForUpdate(vertifyRequest.getUserName());
         if (userOptional.isEmpty()) {
             return "Not valid";
         }
         User user = userOptional.get();
+        if (user.getStatus() != UserStatus.PENDING) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED,
+                    "Only pending accounts can be verified");
+        }
 
-        Optional<OTP> otpOptional = verifyRespository.findById(user.getId());
+        Optional<OTP> otpOptional = verifyRespository.findByUserIdAndPurpose(user.getId(), "verify");
         if (otpOptional.isEmpty()) {
             return "OTP not found";
         }
         OTP otp = otpOptional.get();
-        if(!"verify".equals(otp.getPurpose()))
-            throw  new HttpStatusCodeException(HttpStatus.UNAUTHORIZED, "Wrong purpose!") {
-            };
+        if (!"verify".equals(otp.getPurpose())) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Wrong purpose!");
+        }
 
             if (!vertifyRequest.getOtpCode().equals(otp.getOtpCode())) {
             return "Verify failed";
         }
-        if (otp.getExpriedAt().isBefore(LocalDateTime.now())) {
+        if (otp.getExpriedAt() == null || !otp.getExpriedAt().isAfter(LocalDateTime.now())) {
             return "OTP expired!";
         }
-        user.setStatus("ACTIVE");
+        user.setStatus(UserStatus.ACTIVE);
         userRepository.save(user);
+        verifyRespository.delete(otp);
         return "Verify Success";
     }
     public void forgotPassword(ForgotPasswordRequest request) {
@@ -159,41 +167,25 @@ public class AuthService {
 
 
 
+    @Transactional(noRollbackFor = ResponseStatusException.class)
     public LoginResponse loginWithJwt(@Valid @RequestBody LoginRequest loginRequest) {
-        User user = userRepository.findByUsername(loginRequest.getUserName())
-                .orElseThrow(() -> new HttpStatusCodeException(HttpStatus.UNAUTHORIZED  ,"user not found!") {
-                });
+        User user = userRepository.findByUsernameForUpdate(loginRequest.getUserName())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED,
+                        "Username or password is wrong"));
 
-        if(isAccountLocked(user)){
-            throw new HttpStatusCodeException(HttpStatus.LOCKED, "account is Locked") {
-            };
+        requireLoginAllowed(user);
+        try {
+            authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(
+                    loginRequest.getUserName(), loginRequest.getPassword()));
+            resetFailedAttemps(user);
+        } catch (BadCredentialsException exception) {
+            handleFailedLogin(user);
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Username or password is wrong");
+        } catch (LockedException exception) {
+            throw new ResponseStatusException(HttpStatus.LOCKED, "Account is locked");
+        } catch (DisabledException exception) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Account is not active");
         }
-
-
-
-        if ("PENDING".equals(user.getStatus())) {
-            throw new HttpStatusCodeException( HttpStatus.UNAUTHORIZED, "User is not Active"){};
-        }
-try {
-
-
-    authenticationManager.authenticate(
-            new UsernamePasswordAuthenticationToken(
-                    loginRequest.getUserName(),
-                    loginRequest.getPassword()
-            )
-
-    );
-
-    resetFailedAttemps(user);
-
-}catch (BadCredentialsException exception){
-    handleFailedLogin(user); // ghi nhận lỗi bằng badCredential thì xử lí handle
-
-    throw new HttpStatusCodeException(HttpStatus.UNAUTHORIZED, "Username or Password is Wrong!") {
-    };
-
-}
 
         // Xác thực thành công -> Tạo token chứa username
         String accessToken = jwtService.generateAccessToken(user.getUsername());
@@ -223,21 +215,24 @@ try {
         if(user.getFailedLoginAttemps()>0 || user.getLockUntill() !=null  ) { // Điều kiện gọi Db, vì đang set mặc định, nếu phải kiểm tra mới gọi db, optimize
             user.setLockUntill(null);
             user.setFailedLoginAttemps(0);
-            user.setStatus("ACTIVE");
             userRepository.save(user);
         }
     }
-    private boolean isAccountLocked(User user) {
-        LocalDateTime lockedUntil = user.getLockUntill();
-
-        if( lockedUntil == null ) {// chưa set tg khóa
-            return false;
+    private void requireLoginAllowed(User user) {
+        if (user.getStatus() == UserStatus.LOCKED) {
+            LocalDateTime lockedUntil = user.getLockUntill();
+            if (lockedUntil == null || lockedUntil.isAfter(LocalDateTime.now())) {
+                throw new ResponseStatusException(HttpStatus.LOCKED, "Account is locked");
+            }
+            // Only a timed login lock may expire automatically. Admin locks have no deadline.
+            user.setStatus(UserStatus.ACTIVE);
+            user.setLockUntill(null);
+            user.setFailedLoginAttemps(0);
+            userRepository.save(user);
         }
-        if(lockedUntil.now().isBefore(lockedUntil)){
-            return true;
+        if (user.getStatus() != UserStatus.ACTIVE) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Account is not active");
         }
-        resetFailedAttemps(user);
-        return  false;
     }
     private void handleFailedLogin(User user){
         int failedAttemps = user.getFailedLoginAttemps()+1;
@@ -245,10 +240,13 @@ try {
 
         if(failedAttemps >=MAX_LOCKED_ATTEMPS){
             user.setLockUntill(LocalDateTime.now().plusMinutes(TIME_LOCKED_MITUTES));
-            user.setStatus("LOCKED");
+            user.setStatus(UserStatus.LOCKED);
 
         }
         userRepository.save(user);
+        if (user.getStatus() == UserStatus.LOCKED) {
+            refreshTokenRepository.revokeByUserId(user.getId());
+        }
     }
     private String hashRefreshToken(String token) {
         try {
@@ -281,7 +279,7 @@ try {
                 .orElseThrow(this::invalidRefreshToken);
         User owner = stored.getUser();
         if (owner == null || !claims.getSubject().equals(owner.getUsername())
-                || !"ACTIVE".equals(owner.getStatus())) {
+                || owner.getStatus() != UserStatus.ACTIVE) {
             throw invalidRefreshToken();
         }
         return new LoginResponse(jwtService.generateAccessToken(owner.getUsername()), refreshToken);
@@ -293,8 +291,18 @@ try {
         refreshTokenRepository.revokeByHashToken(hashRefreshToken(request.getRefreshToken()));
     }
 
-    public  void changePassword(String username, ChangePasswordRequest request) {
-        User user = userRepository.findByUsername(username).orElseThrow(()-> new RuntimeException(" Not found username"));
+    @Transactional
+    public void changePassword(String username, ChangePasswordRequest request) {
+        User user = userRepository.findByUsernameForUpdate(username)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found"));
+        // Recheck after acquiring the same row lock used by admin status changes.
+        // Password changes must never clear even an expired login lock.
+        if (user.getStatus() == UserStatus.LOCKED) {
+            throw new ResponseStatusException(HttpStatus.LOCKED, "Account is locked");
+        }
+        if (user.getStatus() != UserStatus.ACTIVE) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Account is not active");
+        }
 
         if(!passwordEncoder.matches(request.getCurrentPassword(),user.getPassword()))
         {

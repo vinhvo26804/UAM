@@ -28,12 +28,12 @@ public class User {
     @Column(nullable = false, unique = false)
     private String email;
     @Builder.Default
-    private String status = "PENDING";
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false)
+    private UserStatus status = UserStatus.PENDING;
+    // Profile fields are completed after registration (see V2/V3 migrations).
     private String fullname;
-    @Column(nullable = false)
     private LocalDate doB;
-    @Column(nullable = false)
     private String phone;
 
     @Column(nullable = false,columnDefinition = "integer default 0")
@@ -46,6 +46,7 @@ public class User {
             joinColumns = @JoinColumn(name = "user_id"),
             inverseJoinColumns = @JoinColumn(name = "role_id")
     )
+    @Builder.Default
     private Set<Role> roles = new HashSet<>();
 
 
