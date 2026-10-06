@@ -193,7 +193,9 @@ public class AuthService {
 
         String hashToken = hashRefreshToken(refreshToken);
 
-        RefreshToken refreshTokenEntity = new RefreshToken();
+        RefreshToken refreshTokenEntity =refreshTokenRepository.findByUserId(user.getId())
+                .orElseGet(RefreshToken::new);
+
         refreshTokenEntity.setHashToken(hashToken);
         refreshTokenEntity.setRevoke(false);
         refreshTokenEntity.setExpireAt(LocalDateTime.ofInstant(
@@ -209,6 +211,9 @@ public class AuthService {
         return new LoginResponse(
                 accessToken, refreshToken
         );
+    }
+    private  void checkHashTokenOfUser(Long userId){
+
     }
 
     private void resetFailedAttemps(User user) {
@@ -328,7 +333,5 @@ public class AuthService {
 
 
 
-//public  boolean isLocked(User user){
-//        if()
-//}
+
 }

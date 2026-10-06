@@ -23,4 +23,5 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long
             + "where token.user.Id = :userId and token.revoke = false")
     int revokeByUserId(@Param("userId") Long userId);
 
+    Optional<RefreshToken> findByUserId(Long userId);
 }

@@ -14,11 +14,8 @@ public class RefreshToken {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-
     private String hashToken;
-
     private boolean revoke;
-
     private LocalDateTime expireAt;
 
     @ManyToOne
