@@ -29,16 +29,14 @@ import java.time.ZoneId;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.util.HexFormat;
 import java.util.Optional;
-import java.util.Random;
-
-
 
 @Service
 public class AuthService {
     private static final int TIME_LOCKED_MITUTES = 15;
-    private static final long MAX_LOCKED_ATTEMPS =5;
+    private static final long MAX_LOCKED_ATTEMPS = 5;
     @Autowired
     private UserRepository userRepository;
     @Autowired
@@ -52,31 +50,40 @@ public class AuthService {
     @Autowired
     private RefreshTokenRepository refreshTokenRepository;
     @Autowired
-    private  ForgotPasswordRepository forgotPasswordRepository;
+    private ForgotPasswordRepository forgotPasswordRepository;
     @Autowired
     private RoleRepository roleRepository;
+
     @Transactional
     public String register(RegisterRequest request) {
-        if (userRepository.existsByUsername(request.getUserName())) {
+        if (userRepository.existsByUsername(request.getUserName().trim())) {
             throw new RuntimeException("User đã tồn tại");
         }
-        if (userRepository.existsByemail(request.getEmail())) {
+        if (userRepository.existsByemail(request.getEmail().trim())) {
             throw new RuntimeException("Email đã tồn tại");
         }
         Role defaultRole = roleRepository.findByName(Role.RoleType.USER)
                 .orElseThrow(() -> new IllegalStateException("Default USER role is missing; run database migrations"));
-        // Tạo đối tượng với mật khẩu đã mã hóa BCrypt
-        User user = User.builder()
-                .username(request.getUserName())
-                .email(request.getEmail())
-                .password(passwordEncoder.encode(request.getPassword()))
-                .build();
+
+        User.UserBuilder userBuilder = User.builder()
+                .username(request.getUserName().trim())
+                .email(request.getEmail().trim())
+                .password(passwordEncoder.encode(request.getPassword()));
+
+        if (request.getPhone() != null && !request.getPhone().isBlank()) {
+            userBuilder.phone(request.getPhone().trim());
+        }
+        if (request.getDoB() != null) {
+            userBuilder.doB(request.getDoB());
+        }
+
+        User user = userBuilder.build();
         user.getRoles().add(defaultRole);
 
         User userSaved = userRepository.save(user);
 
-        Random random = new Random();
-        String otpCode = String.format("%06d", random.nextInt(1000000));
+        SecureRandom secureRandom = new SecureRandom();
+        String otpCode = String.format("%06d", secureRandom.nextInt(1000000));
         LocalDateTime expriedAt = LocalDateTime.now().plusMinutes(5);
 
         OTP otp = OTP.builder()
@@ -89,8 +96,6 @@ public class AuthService {
 
         return "Register Success";
     }
-
-
 
     @Transactional(noRollbackFor = ResponseStatusException.class)
     public String Login(LoginRequest loginRequest) {
@@ -111,11 +116,10 @@ public class AuthService {
     }
 
     @Transactional
-    public String Vertify(VertifyRequest vertifyRequest)
-    {
-        Optional<User> userOptional = userRepository.findByUsernameForUpdate(vertifyRequest.getUserName());
+    public String Vertify(VertifyRequest vertifyRequest) {
+        Optional<User> userOptional = userRepository.findByUsernameForUpdate(vertifyRequest.getUserName().trim());
         if (userOptional.isEmpty()) {
-            return "Not valid";
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Not valid");
         }
         User user = userOptional.get();
         if (user.getStatus() != UserStatus.PENDING) {
@@ -125,24 +129,27 @@ public class AuthService {
 
         Optional<OTP> otpOptional = verifyRespository.findByUserIdAndPurpose(user.getId(), "verify");
         if (otpOptional.isEmpty()) {
-            return "OTP not found";
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "OTP not found");
         }
         OTP otp = otpOptional.get();
         if (!"verify".equals(otp.getPurpose())) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Wrong purpose!");
         }
 
-            if (!vertifyRequest.getOtpCode().equals(otp.getOtpCode())) {
-            return "Verify failed";
-        }
         if (otp.getExpriedAt() == null || !otp.getExpriedAt().isAfter(LocalDateTime.now())) {
-            return "OTP expired!";
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "OTP expired!");
         }
+
+        if (!vertifyRequest.getOtpCode().trim().equals(otp.getOtpCode())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Verify failed");
+        }
+
         user.setStatus(UserStatus.ACTIVE);
         userRepository.save(user);
         verifyRespository.delete(otp);
         return "Verify Success";
     }
+
     public void forgotPassword(ForgotPasswordRequest request) {
         User user = userRepository
                 .findByUsername(request.getUserName())
@@ -165,8 +172,6 @@ public class AuthService {
         forgotPasswordRepository.save(otp);
     }
 
-
-
     @Transactional(noRollbackFor = ResponseStatusException.class)
     public LoginResponse loginWithJwt(@Valid @RequestBody LoginRequest loginRequest) {
         User user = userRepository.findByUsernameForUpdate(loginRequest.getUserName())
@@ -187,14 +192,12 @@ public class AuthService {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Account is not active");
         }
 
-        // Xác thực thành công -> Tạo token chứa username
         String accessToken = jwtService.generateAccessToken(user.getUsername());
         String refreshToken = jwtService.generateRefreshToken(user.getUsername());
 
         String hashToken = hashRefreshToken(refreshToken);
 
-        RefreshToken refreshTokenEntity =refreshTokenRepository.findByUserId(user.getId())
-                .orElseGet(RefreshToken::new);
+        RefreshToken refreshTokenEntity = new RefreshToken();
 
         refreshTokenEntity.setHashToken(hashToken);
         refreshTokenEntity.setRevoke(false);
@@ -205,31 +208,26 @@ public class AuthService {
         refreshTokenEntity.setUser(user);
 
         refreshTokenRepository.save(refreshTokenEntity);
-         // Các phương thức save, remove,... phải gọi từ repo-> phải định nghĩa các phương thwucs của JPa mới thực thi các lệnh đó dược
-
 
         return new LoginResponse(
                 accessToken, refreshToken
         );
     }
-    private  void checkHashTokenOfUser(Long userId){
-
-    }
 
     private void resetFailedAttemps(User user) {
-        if(user.getFailedLoginAttemps()>0 || user.getLockUntill() !=null  ) { // Điều kiện gọi Db, vì đang set mặc định, nếu phải kiểm tra mới gọi db, optimize
+        if (user.getFailedLoginAttemps() > 0 || user.getLockUntill() != null) {
             user.setLockUntill(null);
             user.setFailedLoginAttemps(0);
             userRepository.save(user);
         }
     }
+
     private void requireLoginAllowed(User user) {
         if (user.getStatus() == UserStatus.LOCKED) {
             LocalDateTime lockedUntil = user.getLockUntill();
             if (lockedUntil == null || lockedUntil.isAfter(LocalDateTime.now())) {
                 throw new ResponseStatusException(HttpStatus.LOCKED, "Account is locked");
             }
-            // Only a timed login lock may expire automatically. Admin locks have no deadline.
             user.setStatus(UserStatus.ACTIVE);
             user.setLockUntill(null);
             user.setFailedLoginAttemps(0);
@@ -239,20 +237,21 @@ public class AuthService {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Account is not active");
         }
     }
-    private void handleFailedLogin(User user){
-        int failedAttemps = user.getFailedLoginAttemps()+1;
+
+    private void handleFailedLogin(User user) {
+        int failedAttemps = user.getFailedLoginAttemps() + 1;
         user.setFailedLoginAttemps(failedAttemps);
 
-        if(failedAttemps >=MAX_LOCKED_ATTEMPS){
+        if (failedAttemps >= MAX_LOCKED_ATTEMPS) {
             user.setLockUntill(LocalDateTime.now().plusMinutes(TIME_LOCKED_MITUTES));
             user.setStatus(UserStatus.LOCKED);
-
         }
         userRepository.save(user);
         if (user.getStatus() == UserStatus.LOCKED) {
             refreshTokenRepository.revokeByUserId(user.getId());
         }
     }
+
     private String hashRefreshToken(String token) {
         try {
             byte[] digest = MessageDigest.getInstance("SHA-256")
@@ -262,6 +261,7 @@ public class AuthService {
             throw new IllegalStateException("SHA-256 is unavailable", e);
         }
     }
+
     @Transactional(readOnly = true)
     public LoginResponse refreshToken(RefreshTokenRequest refreshTokenRequest) {
         String refreshToken = refreshTokenRequest.getRefreshToken();
@@ -292,7 +292,6 @@ public class AuthService {
 
     @Transactional
     public void logout(RefreshTokenRequest request) {
-        // A token can revoke only its matching records. Unknown/already revoked tokens are a no-op.
         refreshTokenRepository.revokeByHashToken(hashRefreshToken(request.getRefreshToken()));
     }
 
@@ -300,8 +299,7 @@ public class AuthService {
     public void changePassword(String username, ChangePasswordRequest request) {
         User user = userRepository.findByUsernameForUpdate(username)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found"));
-        // Recheck after acquiring the same row lock used by admin status changes.
-        // Password changes must never clear even an expired login lock.
+
         if (user.getStatus() == UserStatus.LOCKED) {
             throw new ResponseStatusException(HttpStatus.LOCKED, "Account is locked");
         }
@@ -309,29 +307,21 @@ public class AuthService {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Account is not active");
         }
 
-        if(!passwordEncoder.matches(request.getCurrentPassword(),user.getPassword()))
-        {
-            throw new RuntimeException("Password current  is Wrong!");
-        };
-        if(passwordEncoder.matches(request.getNewPassword(), user.getPassword())){
-            throw new RuntimeException("Password current is different new password");
-
-        };
-        if(!request.getNewPassword().equals(request.getConfirmNewPassword())){
-            throw  new RuntimeException(" new Password  not same! ");
-        };
+        if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPassword())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Password current  is Wrong!");
+        }
+        if (passwordEncoder.matches(request.getNewPassword(), user.getPassword())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Password current is different new password");
+        }
+        if (!request.getNewPassword().equals(request.getConfirmNewPassword())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, " new Password  not same! ");
+        }
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
 
         userRepository.save(user);
-
-
     }
 
     private ResponseStatusException invalidRefreshToken() {
         return new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid or revoked refresh token");
     }
-
-
-
-
 }

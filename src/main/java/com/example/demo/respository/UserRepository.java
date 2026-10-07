@@ -2,6 +2,7 @@ package com.example.demo.respository;
 
 import com.example.demo.entity.User;
 import jakarta.persistence.LockModeType;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -30,8 +31,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
         FROM User u
         LEFT JOIN u.roles r
         WHERE (CAST(:username AS String) IS NULL
-               OR LOWER(u.username) LIKE LOWER(CONCAT('%', CAST(:username AS String), '%')))
-          AND (CAST(:email AS String) IS NULL
+               OR LOWER(u.username) LIKE LOWER(CONCAT('%', CAST(:username AS String), '%')))\n          AND (CAST(:email AS String) IS NULL
                OR LOWER(u.email) LIKE LOWER(CONCAT('%', CAST(:email AS String), '%')))
           AND (CAST(:role AS String) IS NULL
                OR LOWER(r.name) = LOWER(CAST(:role AS String)))
@@ -45,4 +45,20 @@ public interface UserRepository extends JpaRepository<User, Long> {
             @Param("status") String status
     );
 
+    @Query("""
+        SELECT u FROM User u
+        WHERE u.status = com.example.demo.entity.UserStatus.ACTIVE
+          AND u.Id NOT IN (SELECT tm.user.Id FROM TeamMember tm WHERE tm.team.id = :teamId)
+          AND (CAST(:query AS String) IS NULL
+               OR TRIM(CAST(:query AS String)) = ''
+               OR LOWER(u.username) LIKE LOWER(CONCAT('%', CAST(:query AS String), '%'))
+               OR LOWER(u.email) LIKE LOWER(CONCAT('%', CAST(:query AS String), '%'))
+               OR (u.fullname IS NOT NULL AND LOWER(u.fullname) LIKE LOWER(CONCAT('%', CAST(:query AS String), '%'))))
+        ORDER BY u.username ASC
+        """)
+    List<User> findCandidateUsersForTeam(
+            @Param("teamId") Long teamId,
+            @Param("query") String query,
+            Pageable pageable
+    );
 }

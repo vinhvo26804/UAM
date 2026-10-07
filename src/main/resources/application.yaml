@@ -17,7 +17,6 @@ spring:
 
   jpa:
     open-in-view: false
-    database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
       ddl-auto: validate
     show-sql: true
@@ -29,8 +28,6 @@ spring:
     properties:
       hibernate:
         format_sql: true
-
-
 
   flyway:
     enabled: true

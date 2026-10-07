@@ -11,21 +11,16 @@ import com.example.demo.entity.UserStatus;
 import com.example.demo.respository.UserRepository;
 import com.example.demo.respository.VerifyRepository;
 import org.springframework.transaction.annotation.Transactional;
-import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.security.SecureRandom;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.Date;
 import java.util.List;
-import java.util.Random;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -37,14 +32,11 @@ public class UserService {
     @Autowired
     private VerifyRepository verifyRepository;
 
-
-    // GET CURRENT USER
     @Transactional(readOnly = true)
     public UserResponse me(String username) {
-
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() ->
-                        new RuntimeException("User not found")
+                        new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found")
                 );
 
         return new UserResponse(
@@ -61,6 +53,7 @@ public class UserService {
                         .collect(Collectors.toSet())
         );
     }
+
     @PreAuthorize("hasRole('ADMIN')")
     @Transactional(readOnly = true)
     public List<UserResponse> searchUsers(
@@ -69,7 +62,6 @@ public class UserService {
             String role,
             String status
     ) {
-
         username = normalize(username);
         email = normalize(email);
         role = normalize(role);
@@ -103,118 +95,94 @@ public class UserService {
         if (value == null || value.isBlank()) {
             return null;
         }
-
         return value.trim();
     }
 
-    // REQUEST CHANGE EMAIL
     @Transactional
     public void changeEmail(
             ChangeEmailRequest request,
             String username
     ) {
-
         User user = activeUserForUpdate(username);
 
-        // Email mới không được giống email hiện tại
-        if (user.getEmail().equals(request.getEmail())) {
-            throw new RuntimeException("New email is same as old email");
+        if (request.getEmail() == null || request.getEmail().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email không được để trống");
         }
 
-        // Email mới không được thuộc user khác
-        if (userRepository.existsByemail(request.getEmail())) {
-            throw new RuntimeException("Email already exists");
+        String newEmail = request.getEmail().trim();
+
+        if (user.getEmail() != null && user.getEmail().equalsIgnoreCase(newEmail)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "New email is same as old email");
         }
-        /*
-         * Mỗi user chỉ nên có 1 OTP CHANGE_EMAIL đang tồn tại.
-         * Nếu trước đó đã yêu cầu OTP rồi thì xoá OTP cũ.
-         */
-        verifyRepository.deleteByUserIdAndPurpose(user.getId(), "CHANGE_EMAIL"
-        );
+
+        if (userRepository.existsByemail(newEmail)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email already exists");
+        }
+
+        verifyRepository.deleteByUserIdAndPurpose(user.getId(), "CHANGE_EMAIL");
 
         String otpCode = generateOTP();
 
         OTP otp = new OTP();
-
         otp.setUserId(user.getId());
         otp.setUsername(username);
         otp.setOtpCode(otpCode);
         otp.setPurpose("CHANGE_EMAIL");
-
-        otp.setExpriedAt(LocalDateTime.now().plusMinutes(5)
-        );
-        otp.setTarget(request.getEmail());
+        otp.setExpriedAt(LocalDateTime.now().plusMinutes(5));
+        otp.setTarget(newEmail);
         verifyRepository.save(otp);
-        //Test
-        System.out.println("CHANGE EMAIL OTP: " + otpCode);
     }
 
-
-    // VERIFY OTP AND UPDATE EMAIL
     @Transactional
     public void verifyChangeEmail(VerifyChangeEmailRequest request, String username) {
         User user = activeUserForUpdate(username);
 
         OTP otp = verifyRepository
                 .findByUserIdAndPurpose(user.getId(), "CHANGE_EMAIL")
-                .orElseThrow(() -> new RuntimeException("OTP not found"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "OTP not found"));
 
-        // Check OTP
-        if (!otp.getOtpCode().equals(request.getOtpCode())) {
-            throw new RuntimeException(
-                    "OTP invalid"
-            );
+        if (request.getOtpCode() == null || request.getOtpCode().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "OTP invalid");
         }
 
-        // Check expired
+        if (!otp.getOtpCode().equals(request.getOtpCode().trim())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "OTP invalid");
+        }
+
         if (otp.getExpriedAt().isBefore(LocalDateTime.now())) {
-            throw new RuntimeException(
-                    "OTP expired"
-            );
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "OTP expired");
         }
 
-        // Check purpose
         if (!"CHANGE_EMAIL".equals(otp.getPurpose())) {
-            throw new RuntimeException(
-                    "OTP purpose invalid"
-            );
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "OTP purpose invalid");
         }
 
-
-        if (userRepository.existsByemail(otp.getTarget())) {
-            throw new RuntimeException(
-                    "Email already exists"
-            );
+        if (otp.getTarget() == null || otp.getTarget().isBlank() || userRepository.existsByemail(otp.getTarget())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email already exists");
         }
-
 
         user.setEmail(otp.getTarget());
-
         userRepository.save(user);
-
-
         verifyRepository.delete(otp);
     }
 
     private String generateOTP() {
-        int otp = 100000 + new Random().nextInt(900000);
-        return String.valueOf(otp);
+        SecureRandom secureRandom = new SecureRandom();
+        return String.format("%06d", secureRandom.nextInt(1000000));
     }
 
     @Transactional
-    public void updateUser(@Valid @RequestBody UpdateUserRequest request, String username){
+    public void updateUser(UpdateUserRequest request, String username) {
         User user = activeUserForUpdate(username);
 
-//        if(request.getFullname().equals(user.getFullname()) || (request.getPhone().equals(user.getPhone())) )
-//            throw new RuntimeException("Value aren't different");
-        if( (request.getDoB().isAfter(LocalDate.now())))
-            throw new RuntimeException("Date must smaller than present");
+        if (request.getDoB() != null && request.getDoB().isAfter(LocalDate.now())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Date must smaller than present");
+        }
 
-            user.setFullname(request.getFullname());
-            user.setPhone(request.getPhone());
-            user.setDoB(request.getDoB());
-            userRepository.save(user);
-
+        user.setFullname(request.getFullname());
+        user.setPhone(request.getPhone());
+        user.setDoB(request.getDoB());
+        userRepository.save(user);
     }
 
     private User activeUserForUpdate(String username) {

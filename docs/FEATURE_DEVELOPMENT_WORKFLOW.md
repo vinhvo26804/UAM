@@ -167,6 +167,6 @@ Nếu thiếu môi trường hoặc còn vấn đề, ghi `BLOCKED` hoặc `INCO
 
 Người dùng gửi:
 
-> Đọc FEATURE_DEVELOPMENT_WORKFLOW.md và thực hiện đúng quy trình cho chức năng [TÊN CHỨC NĂNG]. Tài liệu BA: [ĐƯỜNG DẪN]. Source code: [ĐƯỜNG DẪN/REPOSITORY]. Phạm vi: [FE/BE/CẢ HAI]. Hãy bắt đầu từ xác nhận yêu cầu, trình đầy đủ thiết kế và plan file thay đổi, rồi chờ tôi duyệt trước khi sửa code.
+> Đọc FEATURE_DEVELOPMENT_WORKFLOW.md và thực hiện đúng quy trình cho chức năng CRUD Epic,US, Task, bug,... . Tài liệu BA:[Phan-tich-dac-ta-Issue-Epic-Sprint.md](Feature_CRUD_Epic_US_Task_Bug/Phan-tich-dac-ta-Issue-Epic-Sprint.md)  . Phạm vi: [FE/BE/CẢ HAI]., tài liệu Thiết kế hệ thống [TaiLieuThietKeHeThong.md](Feature_CRUD_Epic_US_Task_Bug/TaiLieuThietKeHeThong.md) :  Hãy bắt đầu từ xác nhận yêu cầu, trình đầy đủ thiết kế và plan file thay đổi, rồi chờ tôi duyệt trước khi sửa code.
 
 Khi bắt đầu, agent báo bước hiện tại, tài liệu đã đọc, thiếu thông tin nào và đầu ra tiếp theo. Khi tiếp tục phiên làm việc, đọc trạng thái và kết quả trước đó để không lặp lại bước đã hoàn tất hoặc bỏ qua điểm duyệt.

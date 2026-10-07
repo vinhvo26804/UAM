@@ -1,7 +1,6 @@
 package com.example.demo.controller;
 
 import com.example.demo.dto.request.Role.AssignRoleRequest;
-import com.example.demo.dto.request.Role.AssignRoleRequest;
 import com.example.demo.entity.Role;
 import com.example.demo.service.RoleService;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -9,8 +8,10 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/roles")
@@ -22,7 +23,6 @@ public class RoleController {
 
     @GetMapping
     public ResponseEntity<List<Role>> getAllRoles() {
-
         return ResponseEntity.ok(
                 roleService.getAllRole()
         );
@@ -32,7 +32,6 @@ public class RoleController {
     public ResponseEntity<Role> getRoleByName(
             @PathVariable String roleName
     ) {
-
         return ResponseEntity.ok(
                 roleService.getRoleByName(roleName)
         );
@@ -45,16 +44,21 @@ public class RoleController {
         roleService.setRoleToUser(request.getUsername(), request.getRoleName());
         return ResponseEntity.ok("Assign role successfully");
     }
+
     @DeleteMapping("/remove")
     public ResponseEntity<String> removeRoleFromUser(
-            @Valid @RequestBody AssignRoleRequest request) {
+            @Valid @RequestBody AssignRoleRequest request
+    ) {
         roleService.removeRoleUser(
                 request.getUsername(),
                 request.getRoleName()
         );
+        return ResponseEntity.ok("Remove role successfully");
+    }
 
-        return ResponseEntity.ok(
-                "Remove role successfully"
-        );
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<Map<String, String>> handleResponseStatus(ResponseStatusException ex) {
+        String message = ex.getReason() != null ? ex.getReason() : "Request failed";
+        return ResponseEntity.status(ex.getStatusCode()).body(Map.of("error", message));
     }
 }
