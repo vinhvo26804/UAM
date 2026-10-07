@@ -71,8 +71,10 @@ export interface RefreshTokenRequest {
 }
 
 export interface ChangePasswordRequest {
-  oldPassword: string;
+  currentPassword?: string;
+  oldPassword?: string;
   newPassword: string;
+  confirmNewPassword?: string;
   confirmPassword?: string;
 }
 
@@ -84,6 +86,7 @@ export interface UpdateUserRequest {
 }
 
 export interface ChangeEmailRequest {
+  email?: string;
   newEmail: string;
 }
 

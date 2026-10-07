@@ -25,8 +25,12 @@ export default function SecurityPage() {
       setErrorMessage("Vui lòng nhập mật khẩu hiện tại.");
       return;
     }
-    if (newPassword.length < 6) {
-      setErrorMessage("Mật khẩu mới phải có tối thiểu 6 ký tự.");
+    if (newPassword.length < 8) {
+      setErrorMessage("Mật khẩu mới phải có tối thiểu 8 ký tự.");
+      return;
+    }
+    if (newPassword.length > 128) {
+      setErrorMessage("Mật khẩu mới tối đa 128 ký tự.");
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -104,7 +108,7 @@ export default function SecurityPage() {
           <PasswordInput
             label="Mật khẩu mới"
             id="sec-new-password"
-            placeholder="Tối thiểu 6 ký tự"
+            placeholder="Tối thiểu 8 ký tự"
             required
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}

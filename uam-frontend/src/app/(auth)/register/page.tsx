@@ -35,8 +35,12 @@ export default function RegisterPage() {
       setErrorMessage("Vui lòng nhập địa chỉ email hợp lệ.");
       return;
     }
-    if (password.length < 6) {
-      setErrorMessage("Mật khẩu phải có ít nhất 6 ký tự.");
+    if (password.length < 8) {
+      setErrorMessage("Mật khẩu phải có ít nhất 8 ký tự.");
+      return;
+    }
+    if (password.length > 128) {
+      setErrorMessage("Mật khẩu tối đa 128 ký tự.");
       return;
     }
     if (password !== confirmPassword) {
@@ -112,7 +116,7 @@ export default function RegisterPage() {
           <PasswordInput
             label="Mật khẩu"
             id="reg-password"
-            placeholder="Tối thiểu 6 ký tự"
+            placeholder="Tối thiểu 8 ký tự"
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}

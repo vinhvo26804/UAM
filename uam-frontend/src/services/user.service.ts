@@ -20,12 +20,13 @@ export const userService = {
    * Cập nhật thông tin cá nhân (PUT /me/update)
    */
   async updateProfile(data: UpdateUserRequest): Promise<UserResponse> {
+    const rawDob = data.dob || data.doB;
     return await apiClient<UserResponse>("/me/update", {
       method: "PUT",
       body: {
         fullname: data.fullname?.trim() || "",
         phone: data.phone?.trim() || "",
-        dob: data.dob || data.doB || "",
+        dob: rawDob && rawDob.trim() !== "" ? rawDob.trim() : null,
       },
     });
   },
@@ -34,10 +35,12 @@ export const userService = {
    * Gửi yêu cầu đổi email (PUT /me/email)
    */
   async requestChangeEmail(data: ChangeEmailRequest): Promise<string> {
+    const targetEmail = (data.newEmail || data.email || "").trim();
     return await apiClient<string>("/me/email", {
       method: "PUT",
       body: {
-        newEmail: data.newEmail.trim(),
+        email: targetEmail,
+        newEmail: targetEmail,
       },
     });
   },

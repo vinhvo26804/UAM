@@ -31,6 +31,7 @@ export const tokenStorage = {
   setAccessToken(token: string): void {
     if (typeof window === "undefined" || !globalThis.localStorage) return;
     globalThis.localStorage.setItem(ACCESS_TOKEN_KEY, token);
+    notifyStorageChange();
   },
 
   getRefreshToken(): string | null {
@@ -41,12 +42,14 @@ export const tokenStorage = {
   setRefreshToken(token: string): void {
     if (typeof window === "undefined" || !globalThis.localStorage) return;
     globalThis.localStorage.setItem(REFRESH_TOKEN_KEY, token);
+    notifyStorageChange();
   },
 
   setTokens(accessToken: string, refreshToken: string): void {
     if (typeof window === "undefined" || !globalThis.localStorage) return;
     globalThis.localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
     globalThis.localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+    notifyStorageChange();
   },
 
   setUserProfile(profile: StoredUserProfile): void {
@@ -119,19 +122,21 @@ export const tokenStorage = {
       return null;
     }
 
+    // Role resolution hierarchy:
+    // 1. Roles stored explicitly via setUserProfile / user profile sync
+    // 2. Roles in JWT claims (if any)
+    // 3. Fallback to ["ROLE_USER"] default
+    const storedRoles = this.getUserRoles();
     let roles: string[] = [];
-    if (Array.isArray(claims.roles) && claims.roles.length > 0) {
-      roles = claims.roles;
-    } else if (typeof claims.roles === "string") {
-      roles = [claims.roles];
+
+    if (storedRoles.length > 0) {
+      roles = storedRoles;
+    } else if (claims.roles && Array.isArray(claims.roles)) {
+      roles = claims.roles.map((r) => String(r));
     } else if (claims.role && typeof claims.role === "string") {
       roles = [claims.role];
-    }
-
-    // Fallback: If JWT does not embed roles (like current backend Spring Boot implementation),
-    // read roles synced from GET /me endpoint
-    if (roles.length === 0) {
-      roles = this.getUserRoles();
+    } else {
+      roles = ["ROLE_USER"];
     }
 
     return {

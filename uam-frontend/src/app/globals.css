@@ -18,6 +18,13 @@
   --danger: #C9372C;
   --danger-hover: #AE2E24;
   --danger-subtle: #FFEDE9;
+
+  /* Atlassian Jira Design Tokens */
+  --jira-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans", Ubuntu, "Fira Sans", "Helvetica Neue", sans-serif;
+  --jira-ease: cubic-bezier(0.2, 0, 0, 1);
+  --jira-duration-fast: 120ms;
+  --jira-duration-normal: 180ms;
+  --jira-duration-slow: 240ms;
 }
 
 @theme inline {
@@ -37,24 +44,115 @@
   --color-danger: var(--danger);
   --color-danger-hover: var(--danger-hover);
   --color-danger-subtle: var(--danger-subtle);
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans", Ubuntu, "Fira Sans", "Helvetica Neue", sans-serif;
+  --font-sans: var(--jira-font);
 }
 
 body {
   margin: 0;
   background-color: var(--background);
   color: var(--foreground);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans", Ubuntu, "Fira Sans", "Helvetica Neue", sans-serif;
+  font-family: var(--jira-font);
   font-size: 14px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Accessibility: Clear focus visible */
 a:focus-visible,
 button:focus-visible,
 input:focus-visible,
-select:focus-visible {
+select:focus-visible,
+textarea:focus-visible {
   outline: 2px solid #0C66E4;
   outline-offset: 2px;
+}
+
+/* Jira-style UI animations */
+@keyframes jiraFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes jiraModalEnter {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes jiraSlideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes jiraSlideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-jira-fade {
+  animation: jiraFadeIn var(--jira-duration-fast) var(--jira-ease) forwards;
+}
+
+.animate-jira-modal {
+  animation: jiraModalEnter var(--jira-duration-normal) var(--jira-ease) forwards;
+}
+
+.animate-jira-slide-in {
+  animation: jiraSlideInRight var(--jira-duration-normal) var(--jira-ease) forwards;
+}
+
+.animate-jira-slide-down {
+  animation: jiraSlideDown var(--jira-duration-fast) var(--jira-ease) forwards;
+}
+
+/* Smooth micro-interactions */
+.jira-interactive-row {
+  transition: background-color var(--jira-duration-fast) var(--jira-ease),
+              border-color var(--jira-duration-fast) var(--jira-ease),
+              box-shadow var(--jira-duration-fast) var(--jira-ease);
+}
+
+.jira-interactive-btn {
+  transition: background-color var(--jira-duration-fast) var(--jira-ease),
+              border-color var(--jira-duration-fast) var(--jira-ease),
+              color var(--jira-duration-fast) var(--jira-ease),
+              transform 80ms var(--jira-ease);
+}
+
+.jira-interactive-btn:active {
+  transform: scale(0.98);
+}
+
+/* Respect user preferences for reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

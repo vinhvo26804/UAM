@@ -54,6 +54,7 @@ export const authService = {
    * Đăng ký tài khoản mới (POST /api/v1/auth/register)
    */
   async register(data: RegisterRequest): Promise<string> {
+    const rawDob = data.dob;
     return await apiClient<string>("/api/v1/auth/register", {
       method: "POST",
       skipAuth: true,
@@ -62,7 +63,7 @@ export const authService = {
         email: data.email.trim(),
         password: data.password,
         phone: data.phone?.trim() || "",
-        dob: data.dob || "",
+        dob: rawDob && rawDob.trim() !== "" ? rawDob.trim() : null,
       },
     });
   },
@@ -85,12 +86,18 @@ export const authService = {
    * Đổi mật khẩu cá nhân (PUT /changePassword)
    */
   async changePassword(data: ChangePasswordRequest): Promise<string> {
+    const current = (data.currentPassword || data.oldPassword || "").trim();
+    const newPwd = data.newPassword;
+    const confirm = (data.confirmNewPassword || data.confirmPassword || data.newPassword).trim();
+
     return await apiClient<string>("/changePassword", {
       method: "PUT",
       body: {
-        oldPassword: data.oldPassword,
-        newPassword: data.newPassword,
-        confirmPassword: data.confirmPassword || data.newPassword,
+        currentPassword: current,
+        oldPassword: current,
+        newPassword: newPwd,
+        confirmNewPassword: confirm,
+        confirmPassword: confirm,
       },
     });
   },

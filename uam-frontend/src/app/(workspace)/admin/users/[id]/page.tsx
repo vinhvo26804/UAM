@@ -161,7 +161,7 @@ export default function AdminUserDetailPage() {
 
   const handleConfirmRemoveRole = async () => {
     if (!user || !roleToRemove) return;
-    if (roleToRemove === "ROLE_USER") {
+    if (roleToRemove === "ROLE_USER" || roleToRemove === "USER") {
       setErrorMessage("Không thể gỡ vai trò cơ sở ROLE_USER của người dùng.");
       setRoleToRemove(null);
       return;
@@ -437,7 +437,7 @@ export default function AdminUserDetailPage() {
                 className="inline-flex items-center gap-1.5 rounded border border-[#DCDFE4] bg-[#F1F2F4] px-2.5 py-1 text-xs font-medium text-[#172B4D]"
               >
                 <span>{r}</span>
-                {r !== "ROLE_USER" && (
+                {r !== "ROLE_USER" && r !== "USER" && (
                   <button
                     type="button"
                     onClick={() => setRoleToRemove(r || null)}
